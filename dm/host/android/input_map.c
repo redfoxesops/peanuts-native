@@ -163,6 +163,7 @@ static int hit(const nxin_touch *t, float x, float y) {
     int best = -1; float bd = 0;
     for (int i = 0; i < t->n; i++) {
         const nxhost_touch_control *c = &t->c[i]; float dx, dy, d = dist(t, c, x, y, &dx, &dy);
+        if (t->floating && c->kind == NXT_STICK) continue;   // floating: a stick is taken by where the touch lands (stick_at), not by its place
         float grab = c->kind == NXT_STICK ? STICK_GRAB : c->kind == NXT_DPAD ? DPAD_GRAB : 1;
         if (d <= c->r * grab && (best < 0 || d / c->r < bd)) { best = i; bd = d / c->r; }
     }
@@ -191,6 +192,11 @@ static void release(nxin_touch *t, int ctl) {
     t->pressed[ctl] = 0;
     if (t->c[ctl].kind == NXT_STICK) t->sx[t->c[ctl].stick] = t->sy[t->c[ctl].stick] = 0;
 }
+// Floating sticks: the stick of the screen's half the touch lands in (left stick on the left, right stick on the right), -1 when the layout has none
+static int stick_at(const nxin_touch *t, float x) {
+    for (int i = 0; i < t->n; i++) if (t->c[i].kind == NXT_STICK && t->c[i].stick == (x >= 0.5f)) return i;
+    return -1;
+}
 static int in_game(const nxin_touch *t, float x, float y) { return x >= t->gx && y >= t->gy && x < t->gx + t->gw && y < t->gy + t->gh; }
 int nxin_touch_event(nxin_touch *t, int action, int id, float x, float y) {
     int k = -1; for (int i = 0; i < t->np; i++) if (t->p[i].id == id) k = i;
@@ -202,6 +208,10 @@ int nxin_touch_event(nxin_touch *t, int action, int id, float x, float y) {
         if (k >= 0 || t->np >= 16) return 0;
         nxin_pointer *p = &t->p[t->np++]; p->id = id; p->x = x; p->y = y; p->slot = -1;
         p->ctl = t->enabled ? hit(t, x, y) : -1;
+        if (p->ctl < 0 && t->enabled && t->floating && (p->ctl = stick_at(t, x)) >= 0) {   // a free stick comes to the finger; a held one keeps its finger (below)
+            int held = 0; for (int i = 0; i < t->np - 1; i++) held |= t->p[i].ctl == p->ctl;
+            if (!held) { t->c[p->ctl].x = x; t->c[p->ctl].y = y; }
+        }
         if (p->ctl >= 0) { for (int i = 0; i < t->np - 1; i++) if (t->p[i].ctl == p->ctl) { p->ctl = -2; return 0; } drive(t, p); return 1; }   // a control has one pointer
         if (!in_game(t, x, y)) { p->ctl = -2; return 0; }
         p->ctl = -1;

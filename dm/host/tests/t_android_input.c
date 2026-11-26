@@ -129,6 +129,21 @@ static void t_layout(void) {
     CHECK(nxin_touch_set_layout(&t, NULL, 0, &kept) == 3 && kept == 13 && ctl(&t, DM_BTN_A) >= 0, "the default layout back: %d", kept);
     nxin_touch_pad(&t, &b, &lx, &ly, &rx, &ry); CHECK(b == 0 && rx == 0 && ry == 0, "and nothing held");
 }
+static void t_floating(void) {
+    nxin_touch t; nxin_touch_init(&t); t.floating = 1; uint64_t b; int32_t lx, ly, rx, ry; float a = t.sw / t.sh;
+    const nxhost_touch_control *A = &t.c[ctl(&t, DM_BTN_A)], *L = &t.c[stick(&t, 0)], *R = &t.c[stick(&t, 1)];
+    CHECK(nxin_touch_event(&t, AM_DOWN, 1, 0.3f, 0.3f) == 1 && L->x == 0.3f && L->y == 0.3f, "an empty spot on the left half takes the left stick, centred there");
+    nxin_touch_event(&t, AM_MOVE, 1, 0.3f + L->r / a, 0.3f); nxin_touch_pad(&t, &b, &lx, &ly, &rx, &ry);
+    CHECK(lx == DM_STICK_MAX && ly == 0, "dragged right from where it landed: %d %d", lx, ly);
+    CHECK(nxin_touch_event(&t, AM_POINTER_DOWN, 2, 0.35f, 0.5f) == 0 && L->x == 0.3f, "a second finger on the left half: the stick stays with the first");
+    CHECK(nxin_touch_event(&t, AM_POINTER_DOWN, 3, 0.6f, 0.4f) == 1 && R->x == 0.6f, "the right half takes the right stick");
+    CHECK(nxin_touch_event(&t, AM_POINTER_DOWN, 4, A->x, A->y) == 1, "A still wins over the floating stick");
+    nxin_touch_pad(&t, &b, &lx, &ly, &rx, &ry); CHECK(b == DM_BTN_A, "A held: %#llx", (unsigned long long)b);
+    nxin_touch_event(&t, AM_CANCEL, 0, 0, 0);
+    CHECK(nxin_touch_event(&t, AM_DOWN, 5, 0.5f, 0.45f) == 1, "no touchscreen while floating");
+    nxin_touch_event(&t, AM_CANCEL, 0, 0, 0); t.floating = 0; nxin_touch_set_layout(&t, NULL, 0, NULL);   // the launcher sends its layout again: the sticks back in place
+    CHECK(nxin_touch_event(&t, AM_DOWN, 6, 0.5f, 0.45f) == 2, "off: the open picture is the touchscreen again");
+}
 static void t_motion(void) {
     float acc[3], rot[3];
     // lying face up: +9.81 m/s² on z is gravity (0, 0, -1) in the Switch frame
@@ -189,7 +204,7 @@ static void t_fit(void) {
 }
 int main(void) {
     t_map(); t_fit();
-    t_keys(); t_pad(); t_touch(); t_layout(); t_motion(); t_shake();
+    t_keys(); t_pad(); t_touch(); t_layout(); t_floating(); t_motion(); t_shake();
     if (fails) { printf("t_android_input: %d failures\n", fails); return 1; }
     printf("t_android_input: ok\n");
     return 0;

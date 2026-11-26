@@ -60,6 +60,7 @@ typedef struct { int id, ctl, slot; float x, y; } nxin_pointer;   // ctl: contro
 typedef struct {
     nxhost_touch_control c[NXT_MAX]; int n;
     int enabled;                    // 0: the controls are hidden and every touch goes to the game's touchscreen
+    int floating;                   // floating sticks: a touch on no other control takes the stick of its screen half, centred where it lands; no touchscreen there
     float sw, sh;                   // screen size in pixels (aspect for hit tests; any unit)
     float gx, gy, gw, gh;           // the game's picture inside the screen, normalized
     nxin_pointer p[16]; int np;

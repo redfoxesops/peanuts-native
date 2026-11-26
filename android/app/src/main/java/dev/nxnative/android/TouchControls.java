@@ -47,6 +47,8 @@ final class TouchControls extends View {
     private int mode = MODE_AUTO;   // the "On-screen controls" setting (setMode)
     private float opacity, scale;
     private boolean haptics;
+    private boolean floating, floatOk;   // floating sticks (the in-game panel's box), and whether the host has them (Native.touchFloating)
+    private final float[] fstick = new float[6];   // where each stick is and whether it is held (Native.touchSticks)
 
     // The layout in pixels, as the host has it
     private int n;
@@ -101,6 +103,7 @@ final class TouchControls extends View {
         opacity = prefs().getFloat("opacity", 0.6f);
         scale = prefs().getFloat("scale", 1f);
         haptics = prefs().getBoolean("haptics", true);
+        floating = prefs().getBoolean("floating", true);
         shown = prefs().getBoolean("shown", true);
         line.setStyle(Paint.Style.STROKE);
         text.setTextAlign(Paint.Align.CENTER);
@@ -151,6 +154,8 @@ final class TouchControls extends View {
 
     private void apply() {
         if (input) Native.touchControlsEnable(active() && !editing);   // off: every touch in the picture is the game's touchscreen
+        if (input) floatOk = Native.touchFloating(floating);
+        Arrays.fill(fstick, 0);
         Arrays.fill(pressed, 0); Arrays.fill(prev, 0); Arrays.fill(sticks, 0);
         invalidate();
     }
@@ -488,6 +493,11 @@ final class TouchControls extends View {
         float s0 = sticks[0], s1 = sticks[1], s2 = sticks[2], s3 = sticks[3];
         Native.touchControlsState(pressed, sticks);
         boolean changed = s0 != sticks[0] || s1 != sticks[1] || s2 != sticks[2] || s3 != sticks[3], tick = false;
+        if (floating && floatOk) {   // a stick that came to a finger or went: redraw
+            float h0 = fstick[2], h1 = fstick[5];
+            Native.touchSticks(fstick);
+            if (h0 != fstick[2] || h1 != fstick[5]) changed = true;
+        }
         for (int i = 0; i < n; i++) {
             if (pressed[i] != prev[i]) changed = true;
             if ((pressed[i] & ~prev[i]) != 0) tick = true;
@@ -582,10 +592,16 @@ final class TouchControls extends View {
     private void drawStick(Canvas c, int i) {
         float sx = sticks[2 * stick[i]], sy = sticks[2 * stick[i] + 1];
         boolean held = sx != 0 || sy != 0;
+        float x = cx[i], y = cy[i];
+        if (floating && floatOk && !editing) {   // floating: drawn only while a finger holds it, where that finger landed
+            int o = 3 * stick[i];
+            if (fstick[o + 2] == 0) return;
+            x = fstick[o] * getWidth(); y = fstick[o + 1] * getHeight();
+        }
         fill.setColor(Color.argb(alpha(0.25f), 0, 0, 0));
-        c.drawCircle(cx[i], cy[i], r[i], fill);
-        c.drawCircle(cx[i], cy[i], r[i], line);
-        float k = r[i] * 0.55f, kx = cx[i] + sx * k, ky = cy[i] - sy * k;
+        c.drawCircle(x, y, r[i], fill);
+        c.drawCircle(x, y, r[i], line);
+        float k = r[i] * 0.55f, kx = x + sx * k, ky = y - sy * k;
         fill.setColor(held ? Color.argb(alpha(0.6f), 255, 255, 255) : Color.argb(alpha(0.4f), 90, 90, 90));
         c.drawCircle(kx, ky, r[i] * 0.45f, fill);
         c.drawCircle(kx, ky, r[i] * 0.45f, line);
@@ -628,7 +644,7 @@ final class TouchControls extends View {
         box.addView(mg);
         TextView ol = new TextView(ctx), sl = new TextView(ctx);
         SeekBar os = new SeekBar(ctx), ss = new SeekBar(ctx);
-        CheckBox hb = new CheckBox(ctx), lb = new CheckBox(ctx), tb = new CheckBox(ctx);
+        CheckBox hb = new CheckBox(ctx), lb = new CheckBox(ctx), tb = new CheckBox(ctx), fb = new CheckBox(ctx);
         os.setMax(90); os.setProgress(Math.round(opacity * 100) - 10);   // 10..100 %
         ss.setMax(90); ss.setProgress(Math.round(scale * 100) - 60);     // 60..150 %
         os.setKeyProgressIncrement(5); ss.setKeyProgressIncrement(5);   // the D-pad's left / right: 5 % a press
@@ -636,6 +652,8 @@ final class TouchControls extends View {
         lb.setText("Show the log over the game"); lb.setChecked(showLog(ctx));
         tb.setText("Show / hide button (top centre)"); tb.setChecked(button);
         tb.setOnCheckedChangeListener((b, v) -> setToggleButton(v));
+        fb.setText("Floating sticks (touch either half of the screen; no game touchscreen there)"); fb.setChecked(floating);
+        fb.setOnCheckedChangeListener((b, v) -> { floating = v; save(); relayout(); });   // relayout: the sticks back in their places
         Runnable labels = () -> { ol.setText("Opacity " + (os.getProgress() + 10) + " %"); sl.setText("Size " + (ss.getProgress() + 60) + " %"); };
         labels.run();
         SeekBar.OnSeekBarChangeListener live = new SeekBar.OnSeekBarChangeListener() {
@@ -657,7 +675,7 @@ final class TouchControls extends View {
         android.widget.Button reset = new android.widget.Button(ctx);
         reset.setText("Reset the controls");
         reset.setOnClickListener(v -> { os.setProgress(50); ss.setProgress(40); hb.setChecked(true); });   // 60 % opacity, 100 % size, the tick on
-        box.addView(ol); box.addView(os); box.addView(sl); box.addView(ss); box.addView(hb); box.addView(lb); box.addView(tb); box.addView(reset);
+        box.addView(ol); box.addView(os); box.addView(sl); box.addView(ss); box.addView(hb); box.addView(fb); box.addView(lb); box.addView(tb); box.addView(reset);
         android.widget.Button ed = new android.widget.Button(ctx);   // the layout editor (runs onEditStart); the picture's position is in the panel's Picture rows (positionRows)
         ed.setText("Edit the controls layout…");
         ed.setOnClickListener(v -> startEditLayout());
@@ -667,5 +685,5 @@ final class TouchControls extends View {
     /** Whether GameActivity keeps the newest log lines over the picture once the game draws (off by default; the settings dialog's last box) */
     static boolean showLog(Context c) { return Prefs.open(c, "touch_controls").getBoolean("log", false); }
 
-    private void save() { prefs().edit().putFloat("opacity", opacity).putFloat("scale", scale).putBoolean("haptics", haptics).commit(); }
+    private void save() { prefs().edit().putFloat("opacity", opacity).putFloat("scale", scale).putBoolean("haptics", haptics).putBoolean("floating", floating).commit(); }
 }

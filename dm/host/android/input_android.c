@@ -246,6 +246,21 @@ int nxhost_touch_controls_set(const nxhost_touch_control *c, int n) {
     LOG("input: on-screen controls: %d, %s layout", kept, c && n > 0 ? "the launcher's" : "the default");
     return kept;
 }
+void nxhost_touch_floating(bool on) {
+    pthread_mutex_lock(&g_mu); touch_once();
+    if (g_touch.floating != on) { touch_release_all(); g_touch.floating = on; }
+    pthread_mutex_unlock(&g_mu);
+}
+void nxhost_touch_sticks(float out[6]) {
+    pthread_mutex_lock(&g_mu); touch_once();
+    for (int i = 0; i < 6; i++) out[i] = 0;
+    for (int i = 0; i < g_touch.n; i++) {
+        const nxhost_touch_control *c = &g_touch.c[i]; if (c->kind != NXT_STICK) continue;
+        float *o = out + 3 * c->stick; o[0] = c->x; o[1] = c->y;
+        for (int k = 0; k < g_touch.np; k++) if (g_touch.p[k].ctl == i) o[2] = 1;
+    }
+    pthread_mutex_unlock(&g_mu);
+}
 int nxhost_touch_controls(nxhost_touch_control *out, int max) {
     pthread_mutex_lock(&g_mu); touch_once();
     int n = g_touch.n < max ? g_touch.n : max; if (out && n > 0) memcpy(out, g_touch.c, (size_t)n * sizeof *out);

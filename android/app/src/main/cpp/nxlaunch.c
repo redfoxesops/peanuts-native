@@ -46,6 +46,8 @@ void nxhost_prewarm_skip(void);
 #pragma weak nxhost_touch_controls_enable
 #pragma weak nxhost_touch_controls_set
 #pragma weak nxhost_touch_controls_state
+#pragma weak nxhost_touch_floating
+#pragma weak nxhost_touch_sticks
 #pragma weak nxhost_motion_start
 #pragma weak nxhost_motion_stop
 #pragma weak nxhost_motion_rotation
@@ -409,6 +411,16 @@ JNIEXPORT void JNICALL Java_dev_nxnative_android_Native_touchControlsState(JNIEn
     nxhost_touch_controls_state(p, NXT_MAX, s);
     if (pressed) { int n = (*env)->GetArrayLength(env, pressed); if (n > NXT_MAX) n = NXT_MAX; (*env)->SetLongArrayRegion(env, pressed, 0, n, (const jlong *)p); }
     if (stick && (*env)->GetArrayLength(env, stick) >= 4) (*env)->SetFloatArrayRegion(env, stick, 0, 4, s);
+}
+// Floating sticks on or off; false: this host has none (the launcher then keeps the sticks in place)
+JNIEXPORT jboolean JNICALL Java_dev_nxnative_android_Native_touchFloating(JNIEnv *env, jclass cls, jboolean on) {
+    (void)env; (void)cls; if (!nxhost_touch_floating || !nxhost_touch_sticks) return JNI_FALSE;
+    nxhost_touch_floating(on); return JNI_TRUE;
+}
+// Where each stick is and whether it is held: x, y (normalized), held (0 / 1), left then right
+JNIEXPORT void JNICALL Java_dev_nxnative_android_Native_touchSticks(JNIEnv *env, jclass cls, jfloatArray out) {
+    (void)cls; if (!nxhost_touch_sticks || !out || (*env)->GetArrayLength(env, out) < 6) return;
+    float s[6]; nxhost_touch_sticks(s); (*env)->SetFloatArrayRegion(env, out, 0, 6, s);
 }
 // A gamepad's own accelerometer (m/s²) and gyroscope (rad/s), PadMotion.java. False: the host takes no controller motion (switched off, or an older host): the launcher stops reading
 JNIEXPORT jboolean JNICALL Java_dev_nxnative_android_Native_padMotion(JNIEnv *env, jclass cls, jint device, jfloat ax, jfloat ay, jfloat az, jfloat gx, jfloat gy, jfloat gz) {

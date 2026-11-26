@@ -40,6 +40,10 @@ NXHOST_API void nxhost_touch_controls_state(uint64_t *pressed, int max, float st
 // The launcher's own layout (it draws the controls; the host still decides what each touch drives): n controls in the units above, at most NXT_MAX; n <= 0 or NULL brings
 // the default layout back. Touches held on the old layout are let go. Returns the number of controls now
 NXHOST_API int nxhost_touch_controls_set(const nxhost_touch_control *c, int n);
+// Floating sticks (off by default): a touch on no other control takes the left or the right stick by the screen half it lands in, centred there (input_map.h).
+// nxhost_touch_sticks: where each stick is now and whether a finger holds it, x, y (normalized), held (0 / 1) for the left then the right stick
+NXHOST_API void nxhost_touch_floating(bool on);
+NXHOST_API void nxhost_touch_sticks(float out[6]);
 
 // ---- Motion ----
 // The phone's gyro and accelerometer through ASensorManager, at 100 Hz, as player 1's six-axis sensor, and phone shakes as DM_BTN_SHAKE. Start in onResume, stop in onPause.

@@ -68,6 +68,12 @@ final class Native {
     /** What each control holds now (DM_BTN_* bits) and the sticks (lx, ly, rx, ry; -1..1, y up). */
     static native void touchControlsState(long[] pressed, float[] stick);
 
+    /** Floating sticks on or off (a touch on no other control takes the stick of its screen half, centred there). False when this host has none. */
+    static native boolean touchFloating(boolean on);
+
+    /** Where each stick is and whether a finger holds it: x, y (normalized to the view), held (0 / 1), the left stick then the right. */
+    static native void touchSticks(float[] out);
+
     /** One sample of a gamepad's own accelerometer (m/s², Android's specific force) and gyroscope (rad/s), PadMotion: the player's six-axis sensor. False: the host takes none (DM_MOTION=0 / DM_PAD_MOTION=0, or no such entry point). */
     static native boolean padMotion(int device, float ax, float ay, float az, float gx, float gy, float gz);
 
