@@ -15,6 +15,12 @@
 </div>
 
 > [!NOTE]
+> This is a personal fork of [Peanuts Native](https://github.com/igawa6/peanuts-native). It focuses on UI/UX
+> improvements (such as the on-screen touch controls). There are no plans to work on performance yet.
+> For official builds, support and the full project, see the
+> [original Peanuts Native repository](https://github.com/igawa6/peanuts-native).
+
+> [!NOTE]
 > Peanuts Native is in development. The current release is on the [releases page](https://github.com/igawa6/peanuts-native/releases). It is not affiliated with Nintendo.
 
 ## What it is
