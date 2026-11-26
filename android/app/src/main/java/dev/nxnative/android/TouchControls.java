@@ -47,6 +47,7 @@ final class TouchControls extends View {
     private int mode = MODE_AUTO;   // the "On-screen controls" setting (setMode)
     private float opacity, scale;
     private boolean haptics;
+    private boolean outline;   // outline style: controls drawn as white rings, filled only while held
     private boolean floating, floatOk;   // floating sticks (the in-game panel's box), and whether the host has them (Native.touchFloating)
     private final float[] fstick = new float[6];   // where each stick is and whether it is held (Native.touchSticks)
 
@@ -104,6 +105,7 @@ final class TouchControls extends View {
         scale = prefs().getFloat("scale", 1f);
         haptics = prefs().getBoolean("haptics", true);
         floating = prefs().getBoolean("floating", true);
+        outline = prefs().getBoolean("outline", true);
         shown = prefs().getBoolean("shown", true);
         line.setStyle(Paint.Style.STROKE);
         text.setTextAlign(Paint.Align.CENTER);
@@ -532,26 +534,30 @@ final class TouchControls extends View {
     }
 
     private void drawControls(Canvas c) {
+        float sw = line.getStrokeWidth();
         for (int i = 0; i < n; i++) {
-            boolean held = pressed[i] != 0;
+            boolean held = pressed[i] != 0, filled = !outline || held;
             fill.setColor(held ? Color.argb(alpha(0.55f), 255, 255, 255) : Color.argb(alpha(0.35f), 0, 0, 0));
-            line.setColor(Color.argb(alpha(0.9f), 255, 255, 255));
+            line.setColor(Color.argb(alpha(outline ? 0.6f : 0.9f), 255, 255, 255));
+            // outline: the stroke is 8 % of the radius; the D-pad, twice a face button wide, takes 4 % so its line matches theirs
+            if (outline) line.setStrokeWidth(Math.max(1f, r[i] * (kind[i] == DPAD ? 0.04f : 0.08f)));
             if (kind[i] == STICK) drawStick(c, i);
             else if (kind[i] == DPAD) drawDpad(c, i);
             else {
                 if (shape[i] == SHAPE_SHOULDER) {
                     rect.set(cx[i] - r[i], cy[i] - r[i] * 0.62f, cx[i] + r[i], cy[i] + r[i] * 0.62f);
-                    c.drawRoundRect(rect, r[i] * 0.5f, r[i] * 0.5f, fill);
+                    if (filled) c.drawRoundRect(rect, r[i] * 0.5f, r[i] * 0.5f, fill);
                     c.drawRoundRect(rect, r[i] * 0.5f, r[i] * 0.5f, line);
                 } else {
-                    c.drawCircle(cx[i], cy[i], r[i], fill);
+                    if (filled) c.drawCircle(cx[i], cy[i], r[i], fill);
                     c.drawCircle(cx[i], cy[i], r[i], line);
                 }
-                text.setColor(held ? Color.argb(alpha(1f), 0, 0, 0) : Color.argb(alpha(1f), 255, 255, 255));
+                text.setColor(held ? Color.argb(alpha(1f), 0, 0, 0) : Color.argb(alpha(outline ? 0.6f : 1f), 255, 255, 255));
                 text.setTextSize(r[i] * (label[i].length() > 1 ? 0.72f : 0.95f));
                 c.drawText(label[i], cx[i], cy[i] - (text.descent() + text.ascent()) / 2, text);
             }
         }
+        line.setStrokeWidth(sw);
     }
 
     /** The editor: the picture's outline, each group's frame (the one held filled), the buttons along the top and what to do */
@@ -599,18 +605,18 @@ final class TouchControls extends View {
             x = fstick[o] * getWidth(); y = fstick[o + 1] * getHeight();
         }
         fill.setColor(Color.argb(alpha(0.25f), 0, 0, 0));
-        c.drawCircle(x, y, r[i], fill);
+        if (!outline) c.drawCircle(x, y, r[i], fill);
         c.drawCircle(x, y, r[i], line);
         float k = r[i] * 0.55f, kx = x + sx * k, ky = y - sy * k;
         fill.setColor(held ? Color.argb(alpha(0.6f), 255, 255, 255) : Color.argb(alpha(0.4f), 90, 90, 90));
-        c.drawCircle(kx, ky, r[i] * 0.45f, fill);
+        if (!outline || held) c.drawCircle(kx, ky, r[i] * 0.45f, fill);
         c.drawCircle(kx, ky, r[i] * 0.45f, line);
     }
 
     private void drawDpad(Canvas c, int i) {
         float x = cx[i], y = cy[i], rr = r[i], w = rr * 0.36f;
         fill.setColor(Color.argb(alpha(0.25f), 0, 0, 0));
-        c.drawCircle(x, y, rr, fill);
+        if (!outline) c.drawCircle(x, y, rr, fill);
         c.drawCircle(x, y, rr, line);
         long[] dirs = {UP, RIGHT, DOWN, LEFT};
         for (int k = 0; k < 4; k++) {
@@ -644,7 +650,7 @@ final class TouchControls extends View {
         box.addView(mg);
         TextView ol = new TextView(ctx), sl = new TextView(ctx);
         SeekBar os = new SeekBar(ctx), ss = new SeekBar(ctx);
-        CheckBox hb = new CheckBox(ctx), lb = new CheckBox(ctx), tb = new CheckBox(ctx), fb = new CheckBox(ctx);
+        CheckBox hb = new CheckBox(ctx), lb = new CheckBox(ctx), tb = new CheckBox(ctx), fb = new CheckBox(ctx), ob = new CheckBox(ctx);
         os.setMax(90); os.setProgress(Math.round(opacity * 100) - 10);   // 10..100 %
         ss.setMax(90); ss.setProgress(Math.round(scale * 100) - 60);     // 60..150 %
         os.setKeyProgressIncrement(5); ss.setKeyProgressIncrement(5);   // the D-pad's left / right: 5 % a press
@@ -654,6 +660,8 @@ final class TouchControls extends View {
         tb.setOnCheckedChangeListener((b, v) -> setToggleButton(v));
         fb.setText("Floating sticks (touch either half of the screen; no game touchscreen there)"); fb.setChecked(floating);
         fb.setOnCheckedChangeListener((b, v) -> { floating = v; save(); relayout(); });   // relayout: the sticks back in their places
+        ob.setText("Outline style (no fill until pressed)"); ob.setChecked(outline);
+        ob.setOnCheckedChangeListener((b, v) -> { outline = v; save(); invalidate(); });
         Runnable labels = () -> { ol.setText("Opacity " + (os.getProgress() + 10) + " %"); sl.setText("Size " + (ss.getProgress() + 60) + " %"); };
         labels.run();
         SeekBar.OnSeekBarChangeListener live = new SeekBar.OnSeekBarChangeListener() {
@@ -675,7 +683,7 @@ final class TouchControls extends View {
         android.widget.Button reset = new android.widget.Button(ctx);
         reset.setText("Reset the controls");
         reset.setOnClickListener(v -> { os.setProgress(50); ss.setProgress(40); hb.setChecked(true); });   // 60 % opacity, 100 % size, the tick on
-        box.addView(ol); box.addView(os); box.addView(sl); box.addView(ss); box.addView(hb); box.addView(fb); box.addView(lb); box.addView(tb); box.addView(reset);
+        box.addView(ol); box.addView(os); box.addView(sl); box.addView(ss); box.addView(hb); box.addView(fb); box.addView(ob); box.addView(lb); box.addView(tb); box.addView(reset);
         android.widget.Button ed = new android.widget.Button(ctx);   // the layout editor (runs onEditStart); the picture's position is in the panel's Picture rows (positionRows)
         ed.setText("Edit the controls layout…");
         ed.setOnClickListener(v -> startEditLayout());
@@ -685,5 +693,5 @@ final class TouchControls extends View {
     /** Whether GameActivity keeps the newest log lines over the picture once the game draws (off by default; the settings dialog's last box) */
     static boolean showLog(Context c) { return Prefs.open(c, "touch_controls").getBoolean("log", false); }
 
-    private void save() { prefs().edit().putFloat("opacity", opacity).putFloat("scale", scale).putBoolean("haptics", haptics).putBoolean("floating", floating).commit(); }
+    private void save() { prefs().edit().putFloat("opacity", opacity).putFloat("scale", scale).putBoolean("haptics", haptics).putBoolean("floating", floating).putBoolean("outline", outline).commit(); }
 }
